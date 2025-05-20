@@ -4,6 +4,7 @@ import uvicorn
 import json
 import asyncio
 from typing import List, Dict, Any
+from datetime import datetime
 
 from app.services.agent.agent_manager import AgentManager
 from app.services.chat.thread_manager import ThreadManager
@@ -35,6 +36,11 @@ knowledge_retrieval = KnowledgeRetrieval()
 # Store active connections
 active_connections: Dict[str, WebSocket] = {}
 
+def datetime_encoder(obj):
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    raise TypeError(f'Object of type {obj.__class__.__name__} is not JSON serializable')
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize services on startup"""
@@ -48,19 +54,33 @@ async def root():
 @app.post("/api/threads")
 async def create_thread(thread_data: ThreadCreate):
     """Create a new discussion thread"""
+    # Create new thread
     thread_id = await thread_manager.create_thread(thread_data.topic)
     
-    # Generate prompt templates based on topic
-    prompt_templates = await agent_manager.generate_prompt_templates(thread_data.topic)
-    
-    # Initialize agents for this thread
-    await agent_manager.initialize_agents(thread_id, prompt_templates)
+    # Get the created thread
     thread = await thread_manager.get_thread(thread_id)
+    
+    # Generate prompt templates and initialize agents
+    prompt_templates = await agent_manager.generate_prompt_templates(thread_data.topic)
+    agents = await agent_manager.initialize_agents(thread_id, prompt_templates)
+    
+    # Create welcome message from system
+    welcome_msg = ChatMessage(
+        thread_id=thread_id,
+        sender_type="system",
+        sender_id="system",
+        content=f"Thread created with {len(agents)} agents: " + 
+                ", ".join([f"{agent.name} ({agent.role.value})" for agent in agents])
+    )
+    await thread_manager.add_message(welcome_msg)
+    
+    # Return the thread data in the expected format
     return {
-        "thread_id": thread_id,
-        "topic": thread_data.topic,
+        "thread_id": thread.id,
+        "topic": thread.topic,
         "created_at": thread.created_at,
-        "prompt_templates": prompt_templates
+        "updated_at": thread.updated_at,
+        "metadata": thread.metadata
     }
 
 @app.get("/api/threads")
@@ -92,11 +112,13 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
         # Send thread history to the client
         thread = await thread_manager.get_thread(thread_id)
         messages = await thread_manager.get_messages(thread_id)
-        await websocket.send_json({
-            "type": "thread_history",
-            "thread": thread.dict(),
-            "messages": [msg.dict() for msg in messages]
-        })
+        await websocket.send_text(
+            json.dumps({
+                "type": "thread_history",
+                "thread": thread.dict(),
+                "messages": [msg.dict() for msg in messages]
+            }, default=datetime_encoder)
+        )
         
         while True:
             # Receive message from client
@@ -107,25 +129,56 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
             user_message = ChatMessage(
                 thread_id=thread_id,
                 sender_type="user",
-                sender_id=message_data.get("user_id", "anonymous"),
-                content=message_data.get("content", ""),
-                parent_id=message_data.get("parent_id")
+                sender_id=message_data.get("user_id", "user"),
+                content=message_data["content"]
             )
+            await thread_manager.add_message(user_message)
             
-            # Save user message
-            saved_message = await thread_manager.add_message(user_message)
+            # Get thread agents
+            agents = await agent_manager.get_thread_agents(thread_id)
             
-            # Broadcast user message to all clients in this thread
-            await broadcast_to_thread(thread_id, {
-                "type": "new_message",
-                "message": saved_message.dict()
-            })
+            # Get context for agents (previous messages)
+            context = [msg.dict() for msg in messages[-5:]]  # Last 5 messages as context
             
-            # Process with agents using A2A protocol
-            asyncio.create_task(process_with_agents(thread_id, saved_message))
+            # Get responses from all agents
+            for agent in agents:
+                try:
+                    response = await agent_manager.get_agent_response(
+                        agent.id,
+                        thread_id,
+                        user_message,
+                        context
+                    )
+                    
+                    # Create agent message
+                    agent_message = ChatMessage(
+                        thread_id=thread_id,
+                        sender_type="agent",
+                        sender_id=agent.id,
+                        content=response.content,
+                        metadata={
+                            "agent_name": agent.name,
+                            "agent_role": agent.role.value
+                        }
+                    )
+                    await thread_manager.add_message(agent_message)
+                    
+                    # Send message to all connected clients
+                    for conn in active_connections.values():
+                        await conn.send_text(
+                            json.dumps({
+                                "type": "new_message",
+                                "message": agent_message.dict()
+                            }, default=datetime_encoder)
+                        )
+                except Exception as e:
+                    print(f"Error getting response from agent {agent.id}: {str(e)}")
+                    continue
             
     except WebSocketDisconnect:
-        # Remove the connection
+        del active_connections[connection_id]
+    except Exception as e:
+        print(f"Error in websocket connection: {str(e)}")
         if connection_id in active_connections:
             del active_connections[connection_id]
 

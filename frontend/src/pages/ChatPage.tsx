@@ -12,13 +12,17 @@ const ChatPage: React.FC = () => {
   
   // Handle thread selection
   const handleSelectThread = async (threadId: string) => {
-    setSelectedThreadId(threadId);
-    await setCurrentThread(threadId);
+    if (threadId) {
+      setSelectedThreadId(threadId);
+      await setCurrentThread(threadId);
+    }
   };
   
   // Handle new thread creation
-  const handleThreadCreated = (threadId: string) => {
-    setSelectedThreadId(threadId);
+  const handleThreadCreated = async (threadId: string) => {
+    if (threadId) {
+      await handleSelectThread(threadId);
+    }
   };
   
   // Handle new message from WebSocket
@@ -27,7 +31,7 @@ const ChatPage: React.FC = () => {
   };
   
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen app-root-bg" style={{ background: 'var(--primary-bg)', color: '#e5e7eb' }}>
       {/* Sidebar */}
       <div className="w-1/4 p-4 flex flex-col space-y-4 overflow-y-auto">
         <NewThreadForm onThreadCreated={handleThreadCreated} />
@@ -52,7 +56,13 @@ const ChatPage: React.FC = () => {
                 threadId={selectedThreadId}
                 onMessage={handleNewMessage}
               >
-                <MessageThread messages={messages} />
+                {({ connected, sendMessage }) => (
+                  <MessageThread 
+                    messages={messages} 
+                    sendMessage={sendMessage}
+                    connected={connected}
+                  />
+                )}
               </WebSocketService>
             </div>
           </div>

@@ -30,11 +30,11 @@ const NewThreadForm: React.FC<NewThreadFormProps> = ({ onThreadCreated }) => {
   };
   
   return (
-    <div className="p-4 bg-white shadow rounded-lg">
-      <h2 className="text-xl font-bold mb-4">Start a New Discussion</h2>
+    <div className="new-thread-form">
+      <h2 className="new-thread-title">Start a New Discussion</h2>
       <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-1">
+        <div className="new-thread-field">
+          <label htmlFor="topic" className="new-thread-label">
             Discussion Topic
           </label>
           <input
@@ -43,25 +43,19 @@ const NewThreadForm: React.FC<NewThreadFormProps> = ({ onThreadCreated }) => {
             value={topic}
             onChange={(e) => setTopic(e.target.value)}
             placeholder="Enter a topic for the AI agents to discuss..."
-            className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="new-thread-input"
             disabled={isCreating || loading}
           />
         </div>
-        
         <button
           type="submit"
-          className={`w-full py-2 px-4 rounded-md font-medium ${
-            isCreating || loading
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-blue-500 text-white hover:bg-blue-600'
-          }`}
+          className="new-thread-button"
           disabled={isCreating || loading}
         >
           {isCreating || loading ? 'Creating...' : 'Start Discussion'}
         </button>
-        
         {error && (
-          <div className="mt-2 text-red-500 text-sm">
+          <div className="new-thread-error">
             {error}
           </div>
         )}

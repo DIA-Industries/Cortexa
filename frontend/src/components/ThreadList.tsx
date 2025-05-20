@@ -17,29 +17,26 @@ const ThreadList: React.FC<ThreadListProps> = ({ onSelectThread, selectedThreadI
   };
   
   return (
-    <div className="bg-white shadow rounded-lg overflow-hidden">
-      <div className="p-4 border-b">
-        <h2 className="text-xl font-bold">Discussions</h2>
+    <div className="thread-list">
+      <div className="thread-list-header">
+        <h2 className="thread-list-title">Discussions</h2>
       </div>
-      
       {loading ? (
-        <div className="p-4 text-center text-gray-500">Loading discussions...</div>
+        <div className="thread-list-loading">Loading discussions...</div>
       ) : error ? (
-        <div className="p-4 text-center text-red-500">{error}</div>
+        <div className="thread-list-error">{error}</div>
       ) : threads.length === 0 ? (
-        <div className="p-4 text-center text-gray-500">No discussions yet. Start a new one!</div>
+        <div className="thread-list-empty">No discussions yet. Start a new one!</div>
       ) : (
-        <ul className="divide-y">
+        <ul className="thread-list-items">
           {threads.map((thread) => (
             <li 
               key={thread.id}
-              className={`p-4 cursor-pointer hover:bg-gray-50 ${
-                selectedThreadId === thread.id ? 'bg-blue-50' : ''
-              }`}
+              className={`thread-list-item${selectedThreadId === thread.id ? ' selected' : ''}`}
               onClick={() => onSelectThread(thread.id)}
             >
-              <div className="font-medium">{thread.topic}</div>
-              <div className="text-sm text-gray-500 mt-1">
+              <div className="thread-list-topic">{thread.topic}</div>
+              <div className="thread-list-date">
                 {formatDate(thread.updated_at)}
               </div>
             </li>

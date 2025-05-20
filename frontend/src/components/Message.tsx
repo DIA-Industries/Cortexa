@@ -14,8 +14,8 @@ const Message: React.FC<MessageProps> = ({ message, isCurrentUser }) => {
         return 'bg-blue-100 text-blue-900';
       case 'agent':
         // Different colors for different agents
-        const roleColor = message.metadata?.role 
-          ? getRoleColor(message.metadata.role) 
+        const roleColor = message.metadata?.agent_role 
+          ? getRoleColor(message.metadata.agent_role) 
           : 'bg-green-100 text-green-900';
         return roleColor;
       case 'system':
@@ -27,7 +27,7 @@ const Message: React.FC<MessageProps> = ({ message, isCurrentUser }) => {
 
   // Get color based on agent role
   const getRoleColor = (role: string) => {
-    switch (role) {
+    switch (role.toLowerCase()) {
       case 'researcher':
         return 'bg-indigo-100 text-indigo-900';
       case 'critic':
@@ -47,31 +47,22 @@ const Message: React.FC<MessageProps> = ({ message, isCurrentUser }) => {
   const getSenderName = () => {
     if (message.sender_type === 'user') {
       return 'You';
-    } else if (message.sender_type === 'agent') {
-      const role = message.metadata?.role || 'Agent';
-      return `${role.charAt(0).toUpperCase() + role.slice(1)} Agent`;
+    } else if (message.sender_type === 'agent' && message.metadata?.agent_name) {
+      return message.metadata.agent_name;
     } else if (message.sender_type === 'system') {
       return 'System';
     }
     return 'Unknown';
   };
 
-  // Format message content with markdown-like syntax
-  const formatContent = (content: string) => {
-    // This is a simple implementation - in a real app, use a markdown parser
-    return content
-      .split('\n')
-      .map((line, i) => <p key={i} className={i > 0 ? 'mt-2' : ''}>{line}</p>);
-  };
-
   return (
-    <div className={`flex w-full mb-4 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`message-container flex w-full mb-4 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
       <div className={`max-w-3/4 rounded-lg px-4 py-2 ${getMessageStyle()}`}>
-        <div className="font-bold text-sm mb-1">{getSenderName()}</div>
-        <div className="text-sm">{formatContent(message.content)}</div>
-        {message.metadata?.round && (
-          <div className="text-xs mt-1 text-gray-500">
-            Round: {message.metadata.round}
+        <div className="font-medium text-sm mb-1">{getSenderName()}</div>
+        <div className="message-content">{message.content}</div>
+        {message.sender_type === 'agent' && message.metadata?.agent_role && (
+          <div className="text-xs mt-1 opacity-75">
+            Role: {message.metadata.agent_role}
           </div>
         )}
       </div>
