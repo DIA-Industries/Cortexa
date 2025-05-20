@@ -55,11 +55,11 @@ async def create_thread(thread_data: ThreadCreate):
     
     # Initialize agents for this thread
     await agent_manager.initialize_agents(thread_id, prompt_templates)
-    
+    thread = await thread_manager.get_thread(thread_id)
     return {
         "thread_id": thread_id,
         "topic": thread_data.topic,
-        "created_at": thread_manager.get_thread(thread_id).created_at,
+        "created_at": thread.created_at,
         "prompt_templates": prompt_templates
     }
 
