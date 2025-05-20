@@ -19,7 +19,12 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
   const { addMessage, setMessages } = useChat();
 
   const sendMessage = async (content: string, parentId?: string): Promise<void> => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (!wsRef.current) {
+      console.error('WebSocket is not initialized');
+      return;
+    }
+
+    if (wsRef.current.readyState !== WebSocket.OPEN) {
       console.error('WebSocket is not connected');
       return;
     }
@@ -30,12 +35,27 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
       user_id: 'user'
     };
 
-    wsRef.current.send(JSON.stringify(message));
+    try {
+      wsRef.current.send(JSON.stringify(message));
+      console.log('Message sent:', message);
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
   };
 
   useEffect(() => {
+    let reconnectAttempts = 0;
+    let reconnectTimeout: NodeJS.Timeout;
+    const MAX_RECONNECT_ATTEMPTS = 10; // Set a maximum retry limit
+
     const connectWebSocket = () => {
       if (!threadId) return;
+
+      // Avoid creating multiple connections for the same thread ID
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+        console.warn('WebSocket connection already exists. Skipping new connection.');
+        return;
+      }
 
       // Close any existing connection
       if (wsRef.current) {
@@ -48,6 +68,7 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
 
       ws.onopen = () => {
         console.log('WebSocket connected');
+        reconnectAttempts = 0; // Reset reconnect attempts on successful connection
       };
 
       ws.onmessage = (event) => {
@@ -68,14 +89,29 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
         }
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
-        // Reconnect immediately
-        connectWebSocket();
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected', {
+          code: event.code,
+          reason: event.reason,
+          wasClean: event.wasClean
+        });
+        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++;
+          const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000); // Exponential backoff capped at 30 seconds
+          reconnectTimeout = setTimeout(connectWebSocket, backoffTime);
+        } else {
+          console.error('Max reconnect attempts reached. Giving up.');
+        }
       };
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (error instanceof Event) {
+          console.error('Error details:', {
+            type: error.type,
+            target: error.target
+          });
+        }
       };
 
       wsRef.current = ws;
@@ -87,6 +123,7 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
       if (wsRef.current) {
         wsRef.current.close();
       }
+      clearTimeout(reconnectTimeout);
     };
   }, [threadId, addMessage, onMessage, setMessages]);
 

@@ -18,7 +18,7 @@ const ThreadList: React.FC<ThreadListProps> = ({ onSelectThread, selectedThreadI
   }
 
   return (
-    <div className="flex flex-col space-y-2">
+    <div className="flex flex-col">
       {threads.length === 0 ? (
         <div className="text-gray-400 text-center py-4">
           No discussions yet. Start a new one!
@@ -28,16 +28,13 @@ const ThreadList: React.FC<ThreadListProps> = ({ onSelectThread, selectedThreadI
           <button
             key={thread.id}
             onClick={() => onSelectThread(thread.id)}
-            className={`w-full text-left p-3 rounded-lg border transition-colors ${
+            className={`w-full text-left p-2 border-b ${
               selectedThreadId === thread.id
-                ? 'bg-blue-600 text-white border-blue-700'
-                : 'bg-[#2d2d2d] text-gray-300 border-gray-700 hover:bg-[#3a3a3a]'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
             }`}
           >
             <div className="font-medium truncate">{thread.topic}</div>
-            <div className="text-sm opacity-75 truncate">
-              {new Date(thread.created_at).toLocaleString()}
-            </div>
           </button>
         ))
       )}

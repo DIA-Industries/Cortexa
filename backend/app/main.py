@@ -119,7 +119,12 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 "messages": [msg.dict() for msg in messages]
             }, default=datetime_encoder)
         )
-        
+    except ValueError as e:
+        print(f"Error in websocket connection: {str(e)}")
+        await websocket.close(code=1003, reason="Thread not found")
+        return
+    
+    try:
         while True:
             # Receive message from client
             data = await websocket.receive_text()
@@ -306,6 +311,55 @@ async def process_with_agents(thread_id: str, user_message: ChatMessage):
         "type": "new_message",
         "message": saved_synthesis.dict()
     })
+
+@app.post("/api/agent_collaboration")
+async def agent_collaboration(input_data: Dict[str, Any]):
+    """Simulate agent collaboration on a given input."""
+    topic = input_data.get("topic", "Default Topic")
+
+    # Initialize agents for the topic
+    prompt_templates = await agent_manager.generate_prompt_templates(topic)
+    agents = await agent_manager.initialize_agents("collaboration_session", prompt_templates)
+
+    # Simulate agent collaboration
+    discussion_messages = []
+
+    for round_num in range(settings.A2A_DISCUSSION_ROUNDS):
+        for agent in agents:
+            # Use A2A protocol for agent-to-agent communication
+            context = [msg.dict() for msg in discussion_messages][-5:]
+            agent_response = await agent_manager.get_agent_discussion_response(
+                agent_id=agent.id,
+                thread_id="collaboration_session",
+                previous_messages=discussion_messages,
+                context=context
+            )
+
+            # Save agent message
+            agent_message = ChatMessage(
+                thread_id="collaboration_session",
+                sender_type="agent",
+                sender_id=agent.id,
+                content=agent_response.content,
+                metadata={
+                    "role": agent.role,
+                    "round": round_num + 1
+                }
+            )
+
+            discussion_messages.append(agent_message)
+
+    # Final synthesis
+    synthesis = await agent_manager.generate_synthesis(
+        thread_id="collaboration_session",
+        discussion_messages=discussion_messages
+    )
+
+    return {
+        "topic": topic,
+        "discussion": [msg.dict() for msg in discussion_messages],
+        "synthesis": synthesis
+    }
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
