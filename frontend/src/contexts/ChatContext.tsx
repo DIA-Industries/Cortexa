@@ -11,6 +11,7 @@ interface ChatContextType {
   setCurrentThread: (threadId: string) => Promise<void>;
   startNewThread: (topic: string) => Promise<string>;
   addMessage: (message: ChatMessage) => void;
+  setMessages: (messages: ChatMessage[]) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -21,6 +22,7 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [messageIds] = useState(new Set<string>());
 
   // Fetch all threads on initial load
   useEffect(() => {
@@ -84,7 +86,17 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Add a new message to the current thread
   const addMessage = (message: ChatMessage) => {
-    setMessages(prevMessages => [...prevMessages, message]);
+    if (!messageIds.has(message.id)) {
+      messageIds.add(message.id);
+      setMessages(prev => [...prev, message]);
+    }
+  };
+
+  // Bulk set messages with duplicate prevention
+  const setMessagesWithDuplicateCheck = (newMessages: ChatMessage[]) => {
+    const uniqueMessages = newMessages.filter(msg => !messageIds.has(msg.id));
+    uniqueMessages.forEach(msg => messageIds.add(msg.id));
+    setMessages(prev => [...prev, ...uniqueMessages]);
   };
 
   return (
@@ -97,7 +109,8 @@ export const ChatProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         error,
         setCurrentThread,
         startNewThread,
-        addMessage
+        addMessage,
+        setMessages: setMessagesWithDuplicateCheck
       }}
     >
       {children}

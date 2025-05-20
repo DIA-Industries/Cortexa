@@ -109,7 +109,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
     active_connections[connection_id] = websocket
     
     try:
-        # Send thread history to the client
+        # Send initial thread history only once
         thread = await thread_manager.get_thread(thread_id)
         messages = await thread_manager.get_messages(thread_id)
         await websocket.send_text(
@@ -130,17 +130,24 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                 thread_id=thread_id,
                 sender_type="user",
                 sender_id=message_data.get("user_id", "user"),
-                content=message_data["content"]
+                content=message_data["content"],
+                parent_id=message_data.get("parent_id")
             )
             await thread_manager.add_message(user_message)
             
-            # Get thread agents
-            agents = await agent_manager.get_thread_agents(thread_id)
-            
-            # Get context for agents (previous messages)
-            context = [msg.dict() for msg in messages[-5:]]  # Last 5 messages as context
+            # Send user message to all clients
+            for conn in active_connections.values():
+                await conn.send_text(
+                    json.dumps({
+                        "type": "new_message",
+                        "message": user_message.dict()
+                    }, default=datetime_encoder)
+                )
             
             # Get responses from all agents
+            agents = await agent_manager.get_thread_agents(thread_id)
+            context = [msg.dict() for msg in await thread_manager.get_messages(thread_id)][-5:]
+            
             for agent in agents:
                 try:
                     response = await agent_manager.get_agent_response(
@@ -156,6 +163,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                         sender_type="agent",
                         sender_id=agent.id,
                         content=response.content,
+                        parent_id=user_message.id,
                         metadata={
                             "agent_name": agent.name,
                             "agent_role": agent.role.value
@@ -163,7 +171,7 @@ async def websocket_endpoint(websocket: WebSocket, thread_id: str):
                     )
                     await thread_manager.add_message(agent_message)
                     
-                    # Send message to all connected clients
+                    # Send agent message to all clients
                     for conn in active_connections.values():
                         await conn.send_text(
                             json.dumps({

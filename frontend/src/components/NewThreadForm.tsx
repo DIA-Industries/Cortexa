@@ -10,7 +10,7 @@ const NewThreadForm: React.FC<NewThreadFormProps> = ({ onThreadCreated }) => {
   const [isCreating, setIsCreating] = useState(false);
   const { startNewThread, loading, error } = useChat();
   
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
     if (topic.trim()) {
@@ -18,9 +18,7 @@ const NewThreadForm: React.FC<NewThreadFormProps> = ({ onThreadCreated }) => {
       try {
         const threadId = await startNewThread(topic);
         setTopic('');
-        if (onThreadCreated) {
-          onThreadCreated(threadId);
-        }
+        onThreadCreated?.(threadId);
       } catch (err) {
         console.error('Error creating thread:', err);
       } finally {
@@ -30,32 +28,29 @@ const NewThreadForm: React.FC<NewThreadFormProps> = ({ onThreadCreated }) => {
   };
   
   return (
-    <div className="new-thread-form">
-      <h2 className="new-thread-title">Start a New Discussion</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="new-thread-field">
-          <label htmlFor="topic" className="new-thread-label">
-            Discussion Topic
-          </label>
-          <input
-            type="text"
-            id="topic"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-            placeholder="Enter a topic for the AI agents to discuss..."
-            className="new-thread-input"
-            disabled={isCreating || loading}
-          />
-        </div>
+    <div className="bg-[#2d2d2d] rounded-lg p-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <input
+          type="text"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="Enter a topic for discussion..."
+          className="w-full p-2 bg-[#1e1e1e] text-gray-200 border border-gray-700 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
+          disabled={isCreating || loading}
+        />
         <button
           type="submit"
-          className="new-thread-button"
-          disabled={isCreating || loading}
+          className={`w-full py-2 rounded-lg font-medium transition-colors ${
+            isCreating || loading || !topic.trim()
+              ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+              : 'bg-blue-600 text-white hover:bg-blue-700'
+          }`}
+          disabled={isCreating || loading || !topic.trim()}
         >
-          {isCreating || loading ? 'Creating...' : 'Start Discussion'}
+          {isCreating || loading ? 'Creating...' : 'Start New Discussion'}
         </button>
         {error && (
-          <div className="new-thread-error">
+          <div className="text-red-500 text-sm mt-2">
             {error}
           </div>
         )}

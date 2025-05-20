@@ -6,7 +6,8 @@ import {
   ThreadDetailResponse 
 } from '../types/chat';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+// Get API URL from environment variables with fallback
+const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8000';
 
 // Create axios instance with base URL
 const api = axios.create({

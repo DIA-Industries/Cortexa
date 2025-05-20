@@ -1,11 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, ReactNode } from 'react';
 import { useChat } from '../contexts/ChatContext';
 import { ChatMessage } from '../types/chat';
 
 interface WebSocketServiceProps {
   threadId: string;
   onMessage: (message: ChatMessage) => void;
-  children: (props: { connected: boolean; sendMessage: (content: string, parentId?: string) => void }) => React.ReactNode;
+  children: (props: { 
+    sendMessage: (content: string, parentId?: string) => Promise<void> 
+  }) => ReactNode;
 }
 
 const WebSocketService: React.FC<WebSocketServiceProps> = ({ 
@@ -13,27 +15,43 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
   onMessage, 
   children 
 }) => {
-  const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const { addMessage } = useChat();
-  const reconnectTimeoutRef = useRef<number>();
-  
-  const sendMessage = (content: string, parentId?: string) => {
-    if (!wsRef.current || !connected) {
-      console.error('WebSocket not connected');
-      return;
-    }
+  const { addMessage, setMessages } = useChat();
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const reconnectAttemptsRef = useRef(0);
+  const hasReceivedHistory = useRef(false);
+  const MAX_RECONNECT_ATTEMPTS = 5;
 
-    const message = {
-      content,
-      parent_id: parentId,
-      user_id: 'user' // You can replace this with actual user ID if needed
+  const sendMessage = async (content: string, parentId?: string): Promise<void> => {
+    const waitForConnection = async (retries: number = 0): Promise<void> => {
+      if (retries >= 3) {
+        throw new Error('Failed to connect to WebSocket');
+      }
+      
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return waitForConnection(retries + 1);
+      }
     };
 
-    wsRef.current.send(JSON.stringify(message));
+    try {
+      await waitForConnection();
+      const message = {
+        content,
+        parent_id: parentId,
+        user_id: 'user'
+      };
+      wsRef.current!.send(JSON.stringify(message));
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      throw err;
+    }
   };
   
   useEffect(() => {
+    hasReceivedHistory.current = false;
+    reconnectAttemptsRef.current = 0;
+    
     const connectWebSocket = () => {
       if (!threadId) return;
       
@@ -42,36 +60,32 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
         wsRef.current.close();
       }
       
-      // Reset connection state
-      setConnected(false);
-      
       try {
-        // Create new WebSocket connection using the backend URL
+        // Create new WebSocket connection
         const wsUrl = `ws://localhost:8000/ws/${threadId}`;
         const ws = new WebSocket(wsUrl);
         
         ws.onopen = () => {
           console.log('WebSocket connected');
-          setConnected(true);
+          reconnectAttemptsRef.current = 0;
         };
         
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
             
-            if (data.type === 'new_message' && data.message) {
-              const message = data.message as ChatMessage;
-              addMessage(message);
-              onMessage(message);
-            } 
-            else if (data.type === 'thread_history' && Array.isArray(data.messages)) {
-              // Handle initial thread history
-              data.messages.forEach((msg: ChatMessage) => {
-                addMessage(msg);
-              });
+            if (data.type === 'thread_history' && !hasReceivedHistory.current) {
+              hasReceivedHistory.current = true;
+              const nonSystemMessages = data.messages?.filter(
+                (msg: ChatMessage) => msg.sender_type !== 'system' || msg.content.includes('synthesized')
+              ) || [];
+              setMessages(nonSystemMessages);
             }
-            else if (data.type === 'error') {
-              console.error('WebSocket error:', data.error);
+            else if (data.type === 'new_message' && data.message) {
+              if (data.message.sender_type !== 'system' || data.message.content.includes('synthesized')) {
+                addMessage(data.message);
+                onMessage(data.message);
+              }
             }
           } catch (err) {
             console.error('Error parsing WebSocket message:', err);
@@ -80,10 +94,12 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
         
         ws.onclose = () => {
           console.log('WebSocket disconnected');
-          setConnected(false);
           
-          // Try to reconnect after a delay
-          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+          // Try to reconnect if under max attempts
+          if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+            reconnectAttemptsRef.current++;
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, 2000);
+          }
         };
         
         ws.onerror = (error) => {
@@ -98,7 +114,6 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
     
     connectWebSocket();
     
-    // Cleanup function
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -107,18 +122,9 @@ const WebSocketService: React.FC<WebSocketServiceProps> = ({
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [threadId, addMessage, onMessage]);
+  }, [threadId, addMessage, onMessage, setMessages]);
   
-  return (
-    <div className="relative flex-1 overflow-y-auto">
-      {!connected && (
-        <div className="absolute top-0 left-0 right-0 bg-yellow-100 text-yellow-800 px-4 py-2 text-sm">
-          Connecting...
-        </div>
-      )}
-      {children({ connected, sendMessage })}
-    </div>
-  );
+  return children({ sendMessage });
 };
 
 export default WebSocketService;

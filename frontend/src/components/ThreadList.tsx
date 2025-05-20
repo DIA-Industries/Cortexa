@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useChat } from '../contexts/ChatContext';
-import { Thread } from '../types/chat';
 
 interface ThreadListProps {
   onSelectThread: (threadId: string) => void;
@@ -8,40 +7,39 @@ interface ThreadListProps {
 }
 
 const ThreadList: React.FC<ThreadListProps> = ({ onSelectThread, selectedThreadId }) => {
-  const { threads, loading, error } = useChat();
+  const { threads, loading } = useChat();
   
-  // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
-  
-  return (
-    <div className="thread-list">
-      <div className="thread-list-header">
-        <h2 className="thread-list-title">Discussions</h2>
+  if (loading) {
+    return (
+      <div className="text-gray-400 text-center py-4">
+        Loading discussions...
       </div>
-      {loading ? (
-        <div className="thread-list-loading">Loading discussions...</div>
-      ) : error ? (
-        <div className="thread-list-error">{error}</div>
-      ) : threads.length === 0 ? (
-        <div className="thread-list-empty">No discussions yet. Start a new one!</div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {threads.length === 0 ? (
+        <div className="text-gray-400 text-center py-4">
+          No discussions yet. Start a new one!
+        </div>
       ) : (
-        <ul className="thread-list-items">
-          {threads.map((thread) => (
-            <li 
-              key={thread.id}
-              className={`thread-list-item${selectedThreadId === thread.id ? ' selected' : ''}`}
-              onClick={() => onSelectThread(thread.id)}
-            >
-              <div className="thread-list-topic">{thread.topic}</div>
-              <div className="thread-list-date">
-                {formatDate(thread.updated_at)}
-              </div>
-            </li>
-          ))}
-        </ul>
+        threads.map(thread => (
+          <button
+            key={thread.id}
+            onClick={() => onSelectThread(thread.id)}
+            className={`w-full text-left p-3 rounded-lg transition-colors ${
+              selectedThreadId === thread.id
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-300 hover:bg-[#2d2d2d]'
+            }`}
+          >
+            <div className="font-medium truncate">{thread.topic}</div>
+            <div className="text-sm opacity-75 truncate">
+              {new Date(thread.created_at).toLocaleString()}
+            </div>
+          </button>
+        ))
       )}
     </div>
   );

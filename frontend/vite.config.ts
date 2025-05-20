@@ -1,6 +1,5 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -8,24 +7,16 @@ export default defineConfig({
   server: {
     port: 3000,
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      '/api': 'http://localhost:8000',
       '/ws': {
         target: 'ws://localhost:8000',
-        ws: true,
-      },
-    },
+        ws: true
+      }
+    }
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  css: {
-    modules: {
-      localsConvention: 'camelCase',
-    },
-  },
+      '@': '/src'
+    }
+  }
 });
