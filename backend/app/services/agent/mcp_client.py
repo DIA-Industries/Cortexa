@@ -36,7 +36,7 @@ class MCPClient:
         await asyncio.sleep(0.5)
         
         # Generate a simulated response based on the agent's role
-        response = self._simulate_agent_response(agent, user_message, context)
+        response = self._simulate_agent_response(agent, prompt, context)
         
         return response
     
